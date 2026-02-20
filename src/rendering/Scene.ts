@@ -10,10 +10,17 @@ let chargeAction: () => void = () => { };
 let resetScene: () => void = () => { };
 let updateBeamPos: (x: number, y: number) => void = () => { };
 
+// exported triggers for global use 
 export const triggerCharge = () => chargeAction();
 export const triggerFire = () => fireAction();
 export const triggerReset = () => resetScene();
 export const updateBeamPosition = (x: number, y: number) => updateBeamPos(x, y);
+
+// Effect State
+const fxState = { rayOpa: 0, spdOpa: 0 };
+let rayTween: gsap.core.Tween | null = null;
+let spdTween: gsap.core.Tween | gsap.core.Timeline | null = null;
+let rayRot = 0, rayProgress = 0;
 
 // 2d canvas
 function makeCanvas(id: string, z: number) {
@@ -28,17 +35,15 @@ function makeCanvas(id: string, z: number) {
 
 const rayC = makeCanvas("ray-canvas", 3);
 const rayCtx = rayC.getContext("2d")!;
-let rayOpa = 0, rayRot = 0, rayProgress = 0;
 
 const spdC = makeCanvas("speed-canvas", 6);
 const spdCtx = spdC.getContext("2d")!;
-let spdOpa = 0;
 
 // ray
 function drawAura(ox: number, oy: number) {
   const W = rayC.width, H = rayC.height;
   rayCtx.clearRect(0, 0, W, H);
-  if (rayOpa <= 0.005) return;
+  if (fxState.rayOpa <= 0.005) return;
 
   const cx = ox * W, cy = oy * H;
   const maxR = Math.hypot(W, H) * 0.95;
@@ -54,9 +59,9 @@ function drawAura(ox: number, oy: number) {
     rayCtx.rotate(angle);
 
     const g = rayCtx.createLinearGradient(0, 0, maxR, 0);
-    g.addColorStop(0, `rgba(255,255,255,${rayOpa})`);
-    g.addColorStop(0.2, `rgba(220,240,255,${rayOpa * 0.7})`);
-    g.addColorStop(0.6, `rgba(180,220,255,${rayOpa * 0.3})`);
+    g.addColorStop(0, `rgba(255,255,255,${fxState.rayOpa})`);
+    g.addColorStop(0.2, `rgba(220,240,255,${fxState.rayOpa * 0.7})`);
+    g.addColorStop(0.6, `rgba(180,220,255,${fxState.rayOpa * 0.3})`);
     g.addColorStop(1, "transparent");
 
     rayCtx.fillStyle = g;
@@ -69,8 +74,8 @@ function drawAura(ox: number, oy: number) {
   }
 
   const glow = rayCtx.createRadialGradient(cx, cy, 0, cx, cy, 140 * (1 + rayProgress));
-  glow.addColorStop(0, `rgba(255,255,255,${rayOpa * 0.9})`);
-  glow.addColorStop(0.5, `rgba(150,200,255,${rayOpa * 0.4})`);
+  glow.addColorStop(0, `rgba(255,255,255,${fxState.rayOpa * 0.9})`);
+  glow.addColorStop(0.5, `rgba(150,200,255,${fxState.rayOpa * 0.4})`);
   glow.addColorStop(1, "transparent");
   rayCtx.fillStyle = glow;
   rayCtx.beginPath();
@@ -83,7 +88,7 @@ let spdSeed = 0;
 function drawSpeedLines() {
   const W = spdC.width, H = spdC.height;
   spdCtx.clearRect(0, 0, W, H);
-  if (spdOpa <= 0.005) return;
+  if (fxState.spdOpa <= 0.005) return;
   const cx = W / 2, cy = H / 2;
   spdSeed++;
   const rng = (s: number) => Math.abs(Math.sin(s * 127.1 + spdSeed * 0.22));
@@ -98,8 +103,8 @@ function drawSpeedLines() {
     const x2 = cx + xOff * (startR + len), y2 = cy + yOff * (startR + len);
 
     const g = spdCtx.createLinearGradient(x1, y1, x2, y2);
-    g.addColorStop(0, `rgba(255,255,255,${spdOpa})`);
-    g.addColorStop(0.8, `rgba(180,220,255,${spdOpa * 0.4})`);
+    g.addColorStop(0, `rgba(255,255,255,${fxState.spdOpa})`);
+    g.addColorStop(0.8, `rgba(180,220,255,${fxState.spdOpa * 0.4})`);
     g.addColorStop(1, "transparent");
     spdCtx.strokeStyle = g;
     spdCtx.lineWidth = 0.5 + rng(i * 2.1) * 3;
@@ -107,6 +112,7 @@ function drawSpeedLines() {
   }
 }
 
+// jagged bolt geometry helper 
 function makeArcGeo(radius: number) {
   const pts: THREE.Vector3[] = [];
   const segs = 12;
@@ -137,6 +143,7 @@ export function initScene(video: HTMLVideoElement) {
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(bloomPass);
 
+  // video texture setup 
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
   function planeSize() {
@@ -154,10 +161,12 @@ export function initScene(video: HTMLVideoElement) {
   flashPlane.position.z = 2.5;
   scene.add(flashPlane);
 
+  // group for energy effects 
   const fx = new THREE.Group();
   scene.add(fx);
   fx.position.set(0, -0.2, 0.5);
 
+  // internal orb group 
   const orbG = new THREE.Group();
   fx.add(orbG);
 
@@ -193,15 +202,50 @@ export function initScene(video: HTMLVideoElement) {
   let t = 0, arcT = 0, chargeP = 0;
   let orbSX = 0.5, orbSY = 0.5;
 
+  // beam tracking with camera projection 
   updateBeamPos = (nx, ny) => {
     orbSX = nx; orbSY = ny;
     const dist = camera.position.z - fx.position.z;
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const pH = 2 * Math.tan(vFov / 2) * dist;
     const pW = pH * camera.aspect;
-    gsap.to(fx.position, { x: (0.5 - nx) * pW, y: -(ny - 0.5) * pH, duration: 0.08, ease: "power2.out" });
+    gsap.to(fx.position, { x: (nx - 0.5) * pW, y: -(ny - 0.5) * pH, duration: 0.08, ease: "power2.out" });
   };
 
+  function updateVideoCover() {
+    if (!video.videoWidth) return;
+    const videoAspect = video.videoWidth / video.videoHeight;
+    const screenAspect = window.innerWidth / window.innerHeight;
+    if (screenAspect > videoAspect) {
+      videoTex.repeat.set(1, videoAspect / screenAspect);
+      videoTex.offset.set(0, (1 - videoTex.repeat.y) / 2);
+    } else {
+      videoTex.repeat.set(screenAspect / videoAspect, 1);
+      videoTex.offset.set((1 - videoTex.repeat.x) / 2, 0);
+    }
+  }
+
+  function handleResize() {
+    const W = window.innerWidth, H = window.innerHeight;
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W, H);
+    composer.setSize(W, H);
+
+    // Resize background planes
+    const { w, h } = planeSize();
+    camPlane.geometry.dispose();
+    camPlane.geometry = new THREE.PlaneGeometry(w, h);
+    flashPlane.geometry.dispose();
+    flashPlane.geometry = new THREE.PlaneGeometry(w * 50, h * 50); // Massive for safety
+
+    updateVideoCover();
+  }
+  window.addEventListener("resize", handleResize);
+  video.addEventListener("loadedmetadata", updateVideoCover);
+  handleResize();
+
+  // power up logic 
   chargeAction = () => {
     if (state === "charging") return;
     state = "charging"; chargeP = 0;
@@ -209,9 +253,12 @@ export function initScene(video: HTMLVideoElement) {
     tl.to([orbO1, orbO2, orbO3, orbO4, orbO5], { opacity: 0.9, duration: 1.0, stagger: 0.1 });
     tl.to(arcMats, { opacity: 0.8, duration: 0.8 }, 0.2);
     gsap.to(bloomPass, { strength: 4.5, duration: 2.0 });
-    gsap.to({ v: 0 }, { v: 1, duration: 2.0, onUpdate: function () { rayOpa = this.targets()[0].v; } });
+
+    if (rayTween) rayTween.kill();
+    rayTween = gsap.to(fxState, { rayOpa: 1, duration: 2.0 });
   };
 
+  // the big boom 
   fireAction = () => {
     if (state === "firing") return;
     state = "firing";
@@ -228,7 +275,12 @@ export function initScene(video: HTMLVideoElement) {
 
     // clear 
     tl.set([orbO1, orbO2, orbO3, orbO4, orbO5, ...arcMats], { opacity: 0 }, 0.1);
-    tl.call(() => { rayOpa = 0; spdOpa = 0; }, [], 0);
+    tl.call(() => {
+      if (rayTween) rayTween.kill();
+      if (spdTween) spdTween.kill();
+      fxState.rayOpa = 0;
+      fxState.spdOpa = 0;
+    }, [], 0);
 
     // boommmmmmmmmmmmmmmmmmmmmmm visual
     gsap.to(bloomPass, { strength: 12, duration: 0.05 });
@@ -241,8 +293,10 @@ export function initScene(video: HTMLVideoElement) {
     tl.to(swMat, { opacity: 0, duration: 0.6, ease: "power2.in" }, 0.1);
 
     // speed lines burst
-    gsap.to({ v: 0 }, { v: 1, duration: 0.1, onUpdate: function () { spdOpa = this.targets()[0].v; } });
-    gsap.to({ v: 1 }, { v: 0, duration: 3.5, delay: 0.2, onUpdate: function () { spdOpa = this.targets()[0].v; } });
+    if (spdTween) spdTween.kill();
+    spdTween = gsap.timeline()
+      .to(fxState, { spdOpa: 1, duration: 0.1 })
+      .to(fxState, { spdOpa: 0, duration: 3.5, delay: 0.2 });
 
     // camera shake
     tl.to(camera.position, {
@@ -259,7 +313,13 @@ export function initScene(video: HTMLVideoElement) {
 
   // reseter
   resetScene = () => {
-    state = "idle"; chargeP = 0; rayOpa = 0; spdOpa = 0;
+    state = "idle"; chargeP = 0;
+    if (tl) tl.kill();
+    if (rayTween) rayTween.kill();
+    if (spdTween) spdTween.kill();
+    fxState.rayOpa = 0;
+    fxState.spdOpa = 0;
+
     soundManager.stopAll();
     gsap.to([orbO1, orbO2, orbO3, orbO4, orbO5, swMat, ...arcMats, flashMat], { opacity: 0, duration: 0.5 });
     gsap.to(bloomPass, { strength: 2.5, duration: 1.0 });
@@ -290,7 +350,7 @@ export function initScene(video: HTMLVideoElement) {
       }
       rayRot += 0.02 + chargeP * 0.05;
     }
-    drawAura(1 - orbSX, orbSY);
+    drawAura(orbSX, orbSY);
     drawSpeedLines();
     videoTex.needsUpdate = true;
     composer.render();

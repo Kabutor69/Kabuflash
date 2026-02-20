@@ -22,18 +22,44 @@ const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
 ];
 
-function drawHands(landmarks: { x: number; y: number; z: number }[][], gesture: GestureType) {
+// map mediapipe space to screen cover 
+function getMappedCoords(x: number, y: number, video: HTMLVideoElement) {
+  const videoAspect = video.videoWidth / video.videoHeight;
+  const screenAspect = overlayCanvas.width / overlayCanvas.height;
+
+  let repeatX = 1, repeatY = 1, offsetX = 0, offsetY = 0;
+  if (screenAspect > videoAspect) {
+    repeatY = videoAspect / screenAspect;
+    offsetY = (1 - repeatY) / 2;
+  } else {
+    repeatX = screenAspect / videoAspect;
+    offsetX = (1 - repeatX) / 2;
+  }
+
+  return {
+    x: ((1 - x) - offsetX) / repeatX,
+    y: (y - offsetY) / repeatY
+  };
+}
+
+// 2d skeleton draw 
+function drawHands(landmarks: { x: number; y: number; z: number }[][], gesture: GestureType, video: HTMLVideoElement) {
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  if (!landmarks.length) return;
+  if (!landmarks.length || !video.videoWidth) return;
+
   const isCharge = gesture === "KABUFLASH_CHARGE";
   const isFire = gesture === "KABUFLASH_FIRE";
   const col = isFire ? "#fff" : isCharge ? "#fff" : "rgba(255,255,255,0.2)";
+
   for (const lm of landmarks) {
-    const px = (p: { x: number }) => (1 - p.x) * overlayCanvas.width;
-    const py = (p: { y: number }) => p.y * overlayCanvas.height;
     ctx.strokeStyle = col; ctx.lineWidth = isCharge || isFire ? 3.5 : 1.5;
     for (const [a, b] of CONNECTIONS) {
-      ctx.beginPath(); ctx.moveTo(px(lm[a]), py(lm[a])); ctx.lineTo(px(lm[b]), py(lm[b])); ctx.stroke();
+      const p1 = getMappedCoords(lm[a].x, lm[a].y, video);
+      const p2 = getMappedCoords(lm[b].x, lm[b].y, video);
+      ctx.beginPath();
+      ctx.moveTo(p1.x * overlayCanvas.width, p1.y * overlayCanvas.height);
+      ctx.lineTo(p2.x * overlayCanvas.width, p2.y * overlayCanvas.height);
+      ctx.stroke();
     }
   }
 }
@@ -62,6 +88,8 @@ function setKiMeter(p: number) {
 }
 
 let holdRing: HTMLElement;
+
+// build circular progress ring 
 function buildHoldRing() {
   holdRing = document.createElement("div");
   holdRing.id = "hold-ring";
@@ -83,6 +111,7 @@ function cancelGrace() {
   if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
 }
 
+// main entry point 
 async function start() {
   buildHoldRing();
   setProgress(20, "Initializing lens...");
@@ -114,11 +143,17 @@ async function start() {
     const result = tracker.detect(video);
     if (result) {
       const gesture = tracker.getStableGesture(result);
-      drawHands(result.landmarks, gesture);
+      // draw skeleton with cover mapping 
+      drawHands(result.landmarks, gesture, video);
 
       if (result.landmarks.length > 0) {
+        // center of hands for beam 
         let tx = 0, ty = 0;
-        for (const h of result.landmarks) { tx += h[0].x; ty += h[0].y; }
+        for (const h of result.landmarks) {
+          const mapped = getMappedCoords(h[0].x, h[0].y, video);
+          tx += mapped.x;
+          ty += mapped.y;
+        }
         import("./rendering/Scene").then(({ updateBeamPosition }) => updateBeamPosition(tx / result.landmarks.length, ty / result.landmarks.length));
       }
 
