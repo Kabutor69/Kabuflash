@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kabuflash</title>
+  <meta name="description" content="High-intensity solar energy simulation and Kabuflash generator.">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+
+<body>
+  <div id="loading">
+    <h1 class="loading-title">Kabuflash</h1>
+    <p class="loading-sub">Initializing neural energy core</p>
+    <div class="progress-wrap">
+      <div class="progress-track">
+        <div id="progress-fill"></div>
+      </div>
+      <p id="progress-label">Syncing vision...</p>
+    </div>
+  </div>
+  <video id="webcam" autoplay playsinline muted></video>
+
+  <canvas id="landmark-canvas"></canvas>
+
+  <div id="hud">
+    <div id="gesture-hint">Awaiting energy signature...</div>
+    <div id="status">System idle</div>
+    <div id="ki-meter">
+      <div id="ki-meter-fill"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

@@ -1,0 +1,218 @@
+@import url('https://fonts.googleapis.com/css2?family=Zen+Antique+Soft&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap');
+
+:root {
+  --ki: #44aaff;
+  --ki-b: #aaddff;
+  --ki-core: #ffffff;
+  --dark: #000810;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Rajdhani', sans-serif;
+  color: #fff;
+  cursor: crosshair;
+}
+
+video {
+  display: none;
+}
+
+canvas {
+  display: block;
+}
+
+#three-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+#landmark-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* UI loading stuff */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  transition: opacity 0.6s ease;
+}
+
+.loading-title {
+  font-family: 'Zen Antique Soft', serif;
+  font-size: clamp(2.8rem, 8vw, 5.5rem);
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow:
+    0 0 18px var(--ki), 0 0 50px var(--ki),
+    0 0 100px #003aff, 0 0 180px #0022aa;
+  animation: title-pulse 2.2s ease-in-out infinite;
+}
+
+.loading-sub {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.55em;
+  text-transform: uppercase;
+  color: rgba(120, 190, 255, 0.45);
+}
+
+.progress-wrap {
+  width: min(400px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.progress-track {
+  height: 2px;
+  background: rgba(68, 170, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0033cc, var(--ki), var(--ki-b));
+  transition: width 0.5s ease;
+  box-shadow: 0 0 14px var(--ki), 0 0 28px #0055ff;
+  width: 0%;
+}
+
+#progress-label {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  color: rgba(100, 180, 255, 0.3);
+  text-transform: uppercase;
+}
+
+/* hud and status */
+#hud {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+}
+
+#status {
+  font-family: 'Orbitron', monospace;
+  font-size: clamp(0.8rem, 2.2vw, 1.15rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(100, 180, 255, 0.45);
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+  padding: 0.55rem 0 0.3rem;
+}
+
+#gesture-hint {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(0.62rem, 1.5vw, 0.82rem);
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.2);
+  text-transform: uppercase;
+  padding-bottom: 0.4rem;
+}
+
+/* ki meter */
+#ki-meter {
+  width: 100%;
+  height: 5px;
+  background: rgba(0, 40, 100, 0.35);
+  position: relative;
+  overflow: visible;
+}
+
+#ki-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #0088ff, #aaeeff);
+  box-shadow: 0 0 10px #44aaff;
+  transition: width 0.08s linear;
+  position: relative;
+}
+
+#ki-meter-fill::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  width: 11px;
+  height: 13px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 14px #aaeeff, 0 0 28px #44aaff, 0 0 50px #0066ff;
+}
+
+/* hold ring circle */
+#hold-ring {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  width: 110px;
+  height: 110px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+#hold-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(68, 170, 255, 0.1);
+}
+
+#hold-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from -90deg,
+      var(--ki-b) 0deg,
+      var(--ki) var(--deg, 0deg),
+      transparent var(--deg, 0deg));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), black calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), black calc(100% - 4px));
+  filter: drop-shadow(0 0 8px var(--ki)) drop-shadow(0 0 16px var(--ki-b));
+}
+
+/* pulse animation */
+@keyframes title-pulse {
+
+  0%,
+  100% {
+    text-shadow: 0 0 20px var(--ki), 0 0 60px var(--ki);
+  }
+
+  50% {
+    text-shadow: 0 0 40px var(--ki-b), 0 0 100px var(--ki), 0 0 180px #0033cc;
+  }
+}
